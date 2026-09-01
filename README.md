@@ -84,6 +84,5 @@ Django 4.2 · Celery · Redis · MoviePy · Pillow · OpenAI · fal.ai
 
 ## Licencia
 
-Sin licencia declarada todavía. Hasta que se agregue una, el código es
-"todos los derechos reservados" por defecto — si quieres reutilizarlo, abre un
-issue.
+MIT — ver [LICENSE](LICENSE). Úsalo, modifícalo y distribúyelo libremente,
+incluso con fines comerciales, conservando el aviso de copyright.
