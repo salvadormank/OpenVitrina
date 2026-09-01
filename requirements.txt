@@ -10,3 +10,7 @@ imageio-ffmpeg>=0.4.9
 requests>=2.31.0
 python-dotenv>=1.0.0
 fal-client>=0.4.0
+
+# --- modo video -> reel ---
+openai-whisper>=20231117    # subtítulos automáticos (opcional)
+opencv-python-headless>=4.8.0    # reencuadre con seguimiento de sujeto (opcional)

@@ -12,11 +12,28 @@ todavía no está endurecido para producción.
 
 ---
 
-## Cómo funciona
+## Dos modos
+
+**Fotos → video con IA.** Cada imagen se anima con un modelo de video generativo.
 
 ```
 imágenes → un clip por imagen (Sora / Kling / Minimax) → transiciones → música → MP4
 ```
+
+**Video existente → reel.** Recorta y reencuadra material que ya tienes.
+No llama a ningún modelo de pago: corre local y es gratis.
+
+```
+video 16:9 → reencuadre 9:16 → subtítulos (Whisper local) → MP4
+```
+
+| Reencuadre | Qué hace |
+|---|---|
+| `smart` | Sigue al sujeto con detección de rostros; cae a `center` si no detecta |
+| `center` | Recorte fijo al centro. Rápido y predecible |
+| `padded` | Video completo sobre fondo difuso. No corta nada |
+
+Los subtítulos se queman en el video y además se exporta un `.srt` aparte.
 
 El trabajo pesado corre en Celery, así que la interfaz no se bloquea: subes las
 fotos, la tarea se encola y la página muestra el avance (`% completado` y en qué

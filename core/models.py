@@ -33,6 +33,16 @@ class VideoProject(models.Model):
         ('upload',    '📤 Mi música'),
         ('none',      '🔇 Sin música'),
     ]
+    SOURCE_TYPES = [
+        ('photos', '🖼️ Fotos → video con IA'),
+        ('video',  '🎬 Video existente → reel'),
+    ]
+    REFRAME_MODES = [
+        ('smart',  '🎯 Seguir al sujeto'),
+        ('center', '⬛ Recorte al centro'),
+        ('padded', '🔲 Completo con fondo difuso'),
+    ]
+
     AI_MODELS = [
         ('sora-2',     '✨ Sora 2 — ~$0.10/video (recomendado)'),
         ('sora-2-pro', '🏆 Sora 2 Pro — ~$0.20/video, máxima calidad'),
@@ -48,6 +58,11 @@ class VideoProject(models.Model):
     prompt       = models.TextField('Prompt', blank=True)
     transition   = models.CharField('Transición', max_length=20, choices=TRANSITIONS, default='crossfade')
     ai_model     = models.CharField('Modelo IA', max_length=100, default='sora-2')
+    source_type  = models.CharField('Origen', max_length=10, choices=SOURCE_TYPES, default='photos')
+    source_video = models.FileField('Video de origen', upload_to='sources/', blank=True, null=True)
+    reframe_mode = models.CharField('Reencuadre', max_length=10, choices=REFRAME_MODES, default='smart')
+    subtitles    = models.BooleanField('Subtítulos automáticos', default=True)
+    srt_file     = models.FileField('Subtítulos .srt', upload_to='srt/', blank=True, null=True)
     music_choice = models.CharField('Música', max_length=100, choices=MUSIC_CHOICES, default='cinematic')
     music_file   = models.FileField('Mi música', upload_to=music_path, blank=True, null=True)
     task_id      = models.CharField(max_length=255, blank=True)

@@ -19,6 +19,73 @@ def _save(project, pct, msg='', extra=None):
     project.save(update_fields=fields)
 
 
+@shared_task(bind=True, max_retries=1, time_limit=3600, name='core.tasks.reframe_video_project')
+def reframe_video_project(self, project_id):
+    """
+    Convierte un video existente en un reel vertical.
+
+    A diferencia de generate_reel, esto no llama a ningún modelo de IA de pago:
+    solo recorta, opcionalmente transcribe con Whisper (local) y exporta.
+    """
+    import os
+    from django.conf import settings as dj
+    from .video_reframe import reframe_video
+    from .video_subtitles import transcribe, segments_to_subtitles, write_srt
+
+    try:
+        project = VideoProject.objects.get(id=project_id)
+    except VideoProject.DoesNotExist:
+        logger.error(f'Proyecto {project_id} no existe')
+        return
+
+    project.status = 'generating'
+    project.task_id = self.request.id
+    project.error_msg = ''
+    _save(project, 2, 'Iniciando…', ['status', 'task_id', 'error_msg'])
+
+    if not project.source_video:
+        project.status = 'error'
+        project.error_msg = 'No hay video de origen'
+        _save(project, 0, project.error_msg, ['status', 'error_msg'])
+        return
+
+    src = project.source_video.path
+    out_dir = os.path.join(dj.MEDIA_ROOT, 'videos')
+    os.makedirs(out_dir, exist_ok=True)
+    out_path = os.path.join(out_dir, f'{project.id}.mp4')
+
+    subs = None
+    try:
+        if project.subtitles:
+            _save(project, 15, 'Transcribiendo audio…')
+            segments, _lang = transcribe(src)
+            if segments:
+                subs = segments_to_subtitles(segments)
+                srt_dir = os.path.join(dj.MEDIA_ROOT, 'srt')
+                os.makedirs(srt_dir, exist_ok=True)
+                srt_path = os.path.join(srt_dir, f'{project.id}.srt')
+                write_srt(subs, srt_path)
+                project.srt_file.name = f'srt/{project.id}.srt'
+                _save(project, 40, f'{len(subs)} subtítulos', ['srt_file'])
+
+        reframe_video(
+            src, out_path,
+            mode=project.reframe_mode,
+            subtitles=subs,
+            progress_callback=lambda m: _save(project, min(project.progress + 8, 95), m),
+        )
+    except Exception as exc:
+        logger.exception(f'Error reencuadrando: {exc}')
+        project.status = 'error'
+        project.error_msg = str(exc)[:2000]
+        _save(project, 0, project.error_msg, ['status', 'error_msg'])
+        return
+
+    project.status = 'done'
+    project.video_file.name = f'videos/{project.id}.mp4'
+    _save(project, 100, '¡Reel listo!', ['status', 'video_file'])
+
+
 @shared_task(bind=True, max_retries=1, time_limit=3600, name='core.tasks.generate_reel')
 def generate_reel(self, project_id):
     from django.conf import settings
