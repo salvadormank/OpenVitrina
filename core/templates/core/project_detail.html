@@ -1,0 +1,238 @@
+{% extends "core/base.html" %}
+{% block title %}{{ project.name }} — PropertyReels AI{% endblock %}
+
+{% block content %}
+<div class="page">
+
+  <div class="page-header">
+    <div>
+      <a href="{% url 'index' %}" class="back">← Mis reels</a>
+      <h1>{{ project.name }}</h1>
+      <p class="meta">{{ project.image_count }} fotos · {{ project.get_transition_display }} · {{ project.ai_model }}</p>
+    </div>
+    <form method="post" action="{% url 'delete_project' project.pk %}"
+          onsubmit="return confirm('¿Eliminar proyecto?')">
+      {% csrf_token %}
+      <button class="btn btn-danger btn-sm">🗑 Eliminar</button>
+    </form>
+  </div>
+
+  <!-- Grid de imágenes / clips -->
+  <div class="card">
+    <h2 class="card__title">📸 Imágenes → Clips de IA</h2>
+    <p class="hint" style="margin-bottom:1rem">Cada foto se convierte en un clip cinemático de 5s generado por IA. Puedes arrastrarlas para cambiar el orden.</p>
+    <div id="imgGrid" class="clips-grid">
+      {% for img in project.images.all %}
+      <div class="clip-item clip-item--{{ img.clip_status }}" data-id="{{ img.pk }}" id="clip-{{ img.pk }}">
+        <div class="clip-item__thumb">
+          <img src="{{ img.image.url }}" loading="lazy" />
+          <span class="clip-num">{{ forloop.counter }}</span>
+        </div>
+        <div class="clip-item__status">
+          <span class="clip-status-icon">
+            {% if img.clip_status == 'pending' %}⏳
+            {% elif img.clip_status == 'generating' %}⚙️
+            {% elif img.clip_status == 'done' %}✅
+            {% else %}❌{% endif %}
+          </span>
+          <span class="clip-status-text">{{ img.get_clip_status_display }}</span>
+          {% if img.clip_status == 'done' and img.clip_file %}
+          <a href="{{ img.clip_file.url }}" target="_blank" class="clip-preview-link">▶ Preview</a>
+          {% endif %}
+        </div>
+        {% if img.clip_error %}
+        <p class="clip-error-msg">{{ img.clip_error|truncatechars:80 }}</p>
+        {% endif %}
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+
+  <!-- Panel de generación -->
+  <div class="card">
+    <h2 class="card__title">🤖 Generación con IA</h2>
+
+    <div id="statusBox">
+      {% if project.status == 'draft' %}
+        <div class="status-banner status-banner--idle">
+          <p>Listo para generar. La IA animará cada foto con Sora 2 / Kling.</p>
+        </div>
+      {% elif project.status == 'error' %}
+        <div class="status-banner status-banner--error">
+          <p>❌ {{ project.error_msg }}</p>
+        </div>
+      {% elif project.status == 'done' %}
+        <div class="status-banner status-banner--done">
+          <p>✅ ¡Reel listo para descargar!</p>
+        </div>
+      {% else %}
+        <div class="status-banner status-banner--active">
+          <div class="loader-row">
+            <div class="ring-loader"></div>
+            <div>
+              <p id="statusTitle">
+                {% if project.status == 'queued' %}En cola…
+                {% elif project.status == 'generating' %}Generando clips con IA…
+                {% elif project.status == 'concat' %}Ensamblando video final…
+                {% endif %}
+              </p>
+              <p id="statusMsg" class="hint">{{ project.progress_msg }}</p>
+            </div>
+          </div>
+          <div class="prog-bar">
+            <div class="prog-bar__fill" id="progFill" style="width:{{ project.progress }}%"></div>
+          </div>
+          <div class="prog-labels">
+            <span id="progPct">{{ project.progress }}%</span>
+            <span id="clipsLabel">Clips: {{ project.clips_done }}/{{ project.image_count }}</span>
+          </div>
+        </div>
+      {% endif %}
+    </div>
+
+    <!-- Video player -->
+    {% if project.status == 'done' and project.video_file %}
+    <div id="videoBox">
+      <video src="{{ project.video_file.url }}" controls playsinline class="video-player"></video>
+      <div class="video-actions">
+        <a href="{% url 'download' project.pk %}" class="btn btn-primary btn-lg" download>⬇️ Descargar MP4</a>
+        <button class="btn btn-ghost btn-lg" onclick="navigator.clipboard.writeText(window.location.href).then(()=>alert('🔗 Enlace copiado'))">🔗 Copiar enlace</button>
+      </div>
+    </div>
+    {% else %}
+    <div id="videoBox" class="hidden"></div>
+    {% endif %}
+
+    <!-- Botón generar -->
+    <div id="actionBox">
+      {% if project.status not in 'generating,concat,queued' %}
+      <button class="btn btn-primary btn-lg" onclick="startGen()">
+        {% if project.status == 'done' %}🔄 Regenerar reel{% else %}🚀 Generar reel con IA{% endif %}
+      </button>
+      <p class="hint" style="margin-top:.5rem">Tiempo estimado: ~1-2 min por imagen</p>
+      {% endif %}
+    </div>
+
+  </div>
+</div>
+
+<script>
+const PK   = '{{ project.pk }}';
+const CSRF = '{{ csrf_token }}';
+let poll   = null;
+
+// Reordenar imágenes con drag & drop
+const grid = document.getElementById('imgGrid');
+if (grid) {
+  new Sortable(grid, {
+    animation: 150,
+    onEnd() {
+      const ids = [...grid.querySelectorAll('.clip-item')].map(el => el.dataset.id);
+      fetch(`/p/${PK}/reordenar/`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
+        body: JSON.stringify({ order: ids })
+      });
+    }
+  });
+}
+
+function startGen() {
+  document.getElementById('actionBox').innerHTML = '';
+  document.getElementById('videoBox').classList.add('hidden');
+  document.getElementById('statusBox').innerHTML = `
+    <div class="status-banner status-banner--active">
+      <div class="loader-row">
+        <div class="ring-loader"></div>
+        <div>
+          <p id="statusTitle">Enviando a la cola…</p>
+          <p id="statusMsg" class="hint">Iniciando generación</p>
+        </div>
+      </div>
+      <div class="prog-bar"><div class="prog-bar__fill" id="progFill" style="width:0%"></div></div>
+      <div class="prog-labels">
+        <span id="progPct">0%</span>
+        <span id="clipsLabel">Clips: 0/${document.querySelectorAll('.clip-item').length}</span>
+      </div>
+    </div>`;
+
+  document.querySelectorAll('.clip-item').forEach(el => {
+    el.className = 'clip-item clip-item--pending';
+    const st = el.querySelector('.clip-status-text');
+    const ic = el.querySelector('.clip-status-icon');
+    if (st) st.textContent = 'Pendiente';
+    if (ic) ic.textContent = '⏳';
+  });
+
+  fetch(`/p/${PK}/generar/`, { method: 'POST', headers: { 'X-CSRFToken': CSRF } })
+    .then(() => { poll = setInterval(pollStatus, 3000); });
+}
+
+function pollStatus() {
+  fetch(`/p/${PK}/estado/`)
+    .then(r => r.json())
+    .then(data => {
+      const fill  = document.getElementById('progFill');
+      const pct   = document.getElementById('progPct');
+      const cl    = document.getElementById('clipsLabel');
+      const title = document.getElementById('statusTitle');
+      const msg   = document.getElementById('statusMsg');
+
+      if (fill)  fill.style.width = data.progress + '%';
+      if (pct)   pct.textContent  = data.progress + '%';
+      if (cl)    cl.textContent   = `Clips: ${data.clips_done}/${data.clips_total}`;
+      if (msg)   msg.textContent  = data.progress_msg;
+      if (title) {
+        const lbls = { queued:'En cola…', generating:'Generando clips con IA…', concat:'Ensamblando video…' };
+        if (lbls[data.status]) title.textContent = lbls[data.status];
+      }
+
+      // Actualizar estado visual de cada clip
+      if (data.clips) {
+        data.clips.forEach((c, idx) => {
+          const items = document.querySelectorAll('.clip-item');
+          if (items[idx]) {
+            const cs = c.clip_status;
+            items[idx].className = `clip-item clip-item--${cs}`;
+            const st = items[idx].querySelector('.clip-status-text');
+            const ic = items[idx].querySelector('.clip-status-icon');
+            const lbl = {pending:'Pendiente',generating:'Generando…',done:'Listo ✅',error:'Error ❌'};
+            const ico = {pending:'⏳',generating:'⚙️',done:'✅',error:'❌'};
+            if (st) st.textContent = lbl[cs] || cs;
+            if (ic) ic.textContent = ico[cs] || '⏳';
+          }
+        });
+      }
+
+      if (data.status === 'done')  { clearInterval(poll); showDone(data.video_url); }
+      if (data.status === 'error') { clearInterval(poll); showError(data.error_msg); }
+    });
+}
+
+function showDone(videoUrl) {
+  document.getElementById('statusBox').innerHTML =
+    '<div class="status-banner status-banner--done"><p>✅ ¡Reel generado exitosamente!</p></div>';
+  const vb = document.getElementById('videoBox');
+  vb.innerHTML = `
+    <video src="${videoUrl}" controls playsinline class="video-player"></video>
+    <div class="video-actions">
+      <a href="/p/${PK}/descargar/" class="btn btn-primary btn-lg" download>⬇️ Descargar MP4</a>
+      <button class="btn btn-ghost btn-lg" onclick="navigator.clipboard.writeText(window.location.href).then(()=>alert('🔗 Copiado'))">🔗 Copiar enlace</button>
+    </div>`;
+  vb.classList.remove('hidden');
+  document.getElementById('actionBox').innerHTML =
+    `<button class="btn btn-ghost btn-lg" onclick="startGen()">🔄 Regenerar</button>`;
+}
+
+function showError(msg) {
+  document.getElementById('statusBox').innerHTML =
+    `<div class="status-banner status-banner--error"><p>❌ ${msg}</p></div>`;
+  document.getElementById('actionBox').innerHTML =
+    `<button class="btn btn-primary btn-lg" onclick="startGen()">🔄 Reintentar</button>`;
+}
+
+{% if project.status in 'generating,concat,queued' %}
+poll = setInterval(pollStatus, 3000);
+{% endif %}
+</script>
+{% endblock %}

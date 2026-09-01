@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>{% block title %}PropertyReels AI{% endblock %}</title>
+  {% load static %}
+  <link rel="stylesheet" href="{% static 'css/style.css' %}" />
+  <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js" defer></script>
+</head>
+<body>
+
+<nav class="navbar">
+  <a href="{% url 'index' %}" class="brand">
+    <span class="brand-icon">▶</span>Property<strong>Reels</strong><span class="brand-ai">AI</span>
+  </a>
+  {% if user.is_authenticated %}
+  <div class="nav-actions">
+    <a href="{% url 'new_project' %}" class="btn btn-primary btn-sm">+ Nuevo reel</a>
+    <div class="avatar-wrap">
+      <button class="avatar" onclick="this.parentElement.classList.toggle('open')">
+        {{ user.username|first|upper }}
+      </button>
+      <div class="dropdown">
+        <span class="dropdown-user">{{ user.username }}</span>
+        <a href="{% url 'logout' %}" class="dropdown-item">🚪 Cerrar sesión</a>
+      </div>
+    </div>
+  </div>
+  {% else %}
+  <div class="nav-actions">
+    <a href="{% url 'login' %}" class="btn btn-ghost btn-sm">Entrar</a>
+    <a href="{% url 'register' %}" class="btn btn-primary btn-sm">Registrarse</a>
+  </div>
+  {% endif %}
+</nav>
+
+<main class="main">
+  {% if messages %}
+    {% for m in messages %}
+    <div class="toast toast--{{ m.tags }}">{{ m }}</div>
+    {% endfor %}
+  {% endif %}
+  {% block content %}{% endblock %}
+</main>
+
+<footer class="footer">
+  PropertyReels AI — Powered by OpenAI Sora &amp; fal.ai
+</footer>
+
+<script>
+  document.addEventListener('click', e => {
+    if (!e.target.closest('.avatar-wrap'))
+      document.querySelectorAll('.avatar-wrap.open').forEach(el => el.classList.remove('open'));
+  });
+</script>
+</body>
+</html>

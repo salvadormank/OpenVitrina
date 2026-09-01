@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Crear cuenta — PropertyReels AI</title>
+  {% load static %}
+  <link rel="stylesheet" href="{% static 'css/style.css' %}" />
+</head>
+<body class="auth-page">
+  <div class="auth-box">
+    <div class="auth-logo">▶ Property<strong>Reels</strong><span style="color:#a78bfa">AI</span></div>
+    <h1 class="auth-title">Crear cuenta</h1>
+
+    <form method="post" class="auth-form">
+      {% csrf_token %}
+      {% for field in form %}
+      <div class="form-group">
+        <label>{{ field.label }}</label>
+        <input type="{{ field.field.widget.input_type }}"
+               name="{{ field.html_name }}"
+               class="input {% if field.errors %}input--error{% endif %}"
+               {% if field.value %}value="{{ field.value }}"{% endif %} />
+        {% for e in field.errors %}<span class="field-error">{{ e }}</span>{% endfor %}
+      </div>
+      {% endfor %}
+      <button type="submit" class="btn btn-primary btn-block">Crear cuenta</button>
+    </form>
+    <p class="auth-switch">¿Ya tienes cuenta? <a href="{% url 'login' %}">Inicia sesión</a></p>
+  </div>
+</body>
+</html>

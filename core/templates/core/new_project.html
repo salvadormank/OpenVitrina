@@ -1,0 +1,159 @@
+{% extends "core/base.html" %}
+{% block title %}Nuevo reel — PropertyReels AI{% endblock %}
+
+{% block content %}
+<div class="form-page">
+  <h1 class="page-title">🎬 Nuevo reel de propiedad</h1>
+  <p class="page-subtitle">La IA animará cada foto con movimiento cinemático real y las unirá en un video listo para Reels.</p>
+
+  <form method="post" enctype="multipart/form-data" id="mainForm">
+    {% csrf_token %}
+
+    <!-- Nombre -->
+    <div class="card">
+      <h2 class="card__title">📋 Proyecto</h2>
+      <div class="form-group">
+        <label>Nombre del proyecto *</label>
+        <input type="text" name="name" class="input" required placeholder="Casa en Lomas de Chapultepec" />
+      </div>
+    </div>
+
+    <!-- Imágenes -->
+    <div class="card">
+      <h2 class="card__title">📸 Fotos de la propiedad</h2>
+      <div id="dropZone" class="dropzone">
+        <span class="dropzone__icon">📁</span>
+        <p class="dropzone__title">Arrastra las fotos o haz clic para seleccionar</p>
+        <p class="dropzone__hint">JPG · PNG · WEBP — Se generará un clip de video por cada foto</p>
+        <input type="file" id="fileInput" name="images" accept="image/*" multiple class="dropzone__input" />
+      </div>
+      <div id="preview" class="preview-grid"></div>
+      <div class="ai-note">
+        <span class="ai-badge">IA</span>
+        Cada imagen genera un clip de <strong>5 segundos</strong> animado con movimiento cinemático real.
+        Tiempo estimado: <strong>~1-2 min por imagen</strong>.
+      </div>
+    </div>
+
+    <!-- Modelo y Transición -->
+    <div class="card">
+      <h2 class="card__title">⚙️ Configuración</h2>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Modelo de IA</label>
+          <select name="ai_model" class="input">
+            <optgroup label="🤖 OpenAI Sora (usa tu OPENAI_API_KEY)">
+              <option value="sora-2" selected>✨ Sora 2 — ~$0.10/video (recomendado)</option>
+              <option value="sora-2-pro">🏆 Sora 2 Pro — ~$0.20/video, máxima calidad</option>
+            </optgroup>
+            <optgroup label="⚡ fal.ai (requiere FAL_KEY)">
+              <option value="fal-ai/kling-video/o3/standard/image-to-video">Kling O3 Standard</option>
+              <option value="fal-ai/kling-video/o3/pro/image-to-video">Kling O3 Pro</option>
+              <option value="fal-ai/minimax/video-01/image-to-video">Minimax Video-01</option>
+              <option value="fal-ai/runway-gen3/turbo/image-to-video">Runway Gen-3 Turbo</option>
+            </optgroup>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Transición entre clips</label>
+          <select name="transition" class="input">
+            {% for val, label in transitions %}
+            <option value="{{ val }}" {% if val == 'crossfade' %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <!-- Prompt -->
+    <div class="card">
+      <h2 class="card__title">✍️ Prompt cinemático <span class="badge-opt">opcional</span></h2>
+      <div class="form-group">
+        <textarea name="prompt" class="input input--textarea" rows="5"
+                  placeholder="{{ default_prompt }}">{{ default_prompt }}</textarea>
+        <p class="hint">Este texto guía al modelo de IA para generar el movimiento de cada clip.</p>
+      </div>
+    </div>
+
+    <!-- Música -->
+    <div class="card">
+      <h2 class="card__title">🎵 Música de fondo</h2>
+      <div class="music-grid">
+        {% for val, label in music_choices %}
+        <label class="music-opt">
+          <input type="radio" name="music_choice" value="{{ val }}" {% if val == 'cinematic' %}checked{% endif %} />
+          <span class="music-opt__box">
+            <span class="music-opt__icon">
+              {% if val == 'cinematic' %}🎼{% elif val == 'upbeat' %}🎵{% elif val == 'luxury' %}🎹{% elif val == 'upload' %}📤{% else %}🔇{% endif %}
+            </span>
+            <span>{{ label }}</span>
+          </span>
+        </label>
+        {% endfor %}
+      </div>
+      <div id="musicUpload" class="hidden" style="margin-top:.75rem">
+        <input type="file" name="music_file" accept="audio/*" class="input" />
+        <p class="hint">MP3, WAV, M4A</p>
+      </div>
+    </div>
+
+    <div class="form-actions">
+      <a href="{% url 'index' %}" class="btn btn-ghost">Cancelar</a>
+      <button type="submit" class="btn btn-primary btn-lg">🚀 Crear proyecto</button>
+    </div>
+  </form>
+</div>
+
+<script>
+const dropZone  = document.getElementById('dropZone');
+const fileInput = document.getElementById('fileInput');
+const preview   = document.getElementById('preview');
+let files = [];
+
+dropZone.addEventListener('click', () => fileInput.click());
+dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('dropzone--over'); });
+dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dropzone--over'));
+dropZone.addEventListener('drop', e => { e.preventDefault(); dropZone.classList.remove('dropzone--over'); addFiles([...e.dataTransfer.files]); });
+fileInput.addEventListener('change', () => addFiles([...fileInput.files]));
+
+function addFiles(newFiles) {
+  newFiles.filter(f => f.type.startsWith('image/')).forEach(f => files.push(f));
+  renderPreview();
+}
+
+function renderPreview() {
+  preview.innerHTML = '';
+  files.forEach((f, i) => {
+    const url = URL.createObjectURL(f);
+    const div = document.createElement('div');
+    div.className  = 'prev-item';
+    div.dataset.index = i;
+    div.innerHTML  = `<img src="${url}" /><span class="prev-num">${i+1}</span>
+      <button type="button" class="prev-del" onclick="removeFile(${i})">✕</button>
+      <span class="prev-ai">🤖 IA</span>`;
+    preview.appendChild(div);
+  });
+  if (files.length > 1) new Sortable(preview, { animation: 150, onEnd: reorder });
+}
+
+function removeFile(i) { files.splice(i, 1); renderPreview(); }
+function reorder() {
+  const items = [...preview.querySelectorAll('.prev-item')];
+  files = items.map(el => files[+el.dataset.index]);
+  renderPreview();
+}
+
+document.getElementById('mainForm').addEventListener('submit', e => {
+  if (!files.length) { e.preventDefault(); alert('Sube al menos una imagen.'); return; }
+  const dt = new DataTransfer();
+  files.forEach(f => dt.items.add(f));
+  fileInput.files = dt.files;
+});
+
+document.querySelectorAll('[name="music_choice"]').forEach(r =>
+  r.addEventListener('change', () =>
+    document.getElementById('musicUpload').classList.toggle('hidden', r.value !== 'upload')
+  )
+);
+</script>
+{% endblock %}

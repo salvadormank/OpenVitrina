@@ -1,0 +1,53 @@
+{% extends "core/base.html" %}
+{% block title %}Mis Reels — PropertyReels AI{% endblock %}
+
+{% block content %}
+<div class="page">
+
+  <div class="page-header">
+    <h1>Mis reels</h1>
+    <a href="{% url 'new_project' %}" class="btn btn-primary">+ Nuevo reel</a>
+  </div>
+
+  {% if projects %}
+  <div class="grid">
+    {% for p in projects %}
+    <a href="{% url 'project_detail' p.pk %}" class="project-card">
+      <div class="project-card__thumb">
+        {% with p.images.first as fi %}
+          {% if fi %}<img src="{{ fi.image.url }}" alt="{{ p.name }}" loading="lazy" />
+          {% else %}<div class="thumb-placeholder">🏠</div>{% endif %}
+        {% endwith %}
+        <span class="badge badge--{{ p.status }}">
+          {% if p.status == 'draft' %}📝 Borrador
+          {% elif p.status == 'queued' %}⏳ En cola
+          {% elif p.status == 'generating' %}⚙️ Generando
+          {% elif p.status == 'concat' %}🎬 Ensamblando
+          {% elif p.status == 'done' %}✅ Listo
+          {% else %}❌ Error{% endif %}
+        </span>
+        {% if p.status in 'queued generating concat' %}
+        <div class="card-progress">
+          <div class="card-progress__bar" style="width:{{ p.progress }}%"></div>
+        </div>
+        {% endif %}
+      </div>
+      <div class="project-card__body">
+        <h3>{{ p.name }}</h3>
+        <p class="meta">{{ p.image_count }} fotos · {{ p.get_transition_display }}</p>
+      </div>
+    </a>
+    {% endfor %}
+  </div>
+
+  {% else %}
+  <div class="empty">
+    <div class="empty__icon">🎬</div>
+    <h2>Sin proyectos todavía</h2>
+    <p>Sube fotos de una propiedad y la IA generará un reel cinemático.</p>
+    <a href="{% url 'new_project' %}" class="btn btn-primary btn-lg">Crear primer reel</a>
+  </div>
+  {% endif %}
+
+</div>
+{% endblock %}
